@@ -2,22 +2,34 @@
 Dynamic Routing Between Capsules
 https://arxiv.org/abs/1710.09829
 
-PyTorch implementation by Kenta Iwasaki @ Gram.AI.
-"""
-import sys
-sys.setrecursionlimit(15000)
+Original PyTorch implementation by Kenta Iwasaki @ Gram.AI.
 
+Modified by theScinder 2019/03
+
+"""
+
+import time
+from torch.autograd import Variable
 import torch
 import torch.nn.functional as F
 from torch import nn
 import numpy as np
 
-BATCH_SIZE = 100
+import matplotlib.pyplot as plt
+import torchvision
+import torchvision.transforms as transforms
+
+BATCH_SIZE = 8
 NUM_CLASSES = 10
-NUM_EPOCHS = 500
+NUM_EPOCHS = 1
 NUM_ROUTING_ITERATIONS = 3
 
-
+def imshow(img):
+    img = img / 2 + 0.5     # unnormalize
+    npimg = img.numpy()
+    plt.imshow(np.transpose(npimg, (1, 2, 0)))
+    plt.show()
+    
 def softmax(input, dim=1):
     transposed_input = input.transpose(dim, len(input.size()) - 1)
     softmaxed_output = F.softmax(transposed_input.contiguous().view(-1, transposed_input.size(-1)), dim=-1)
@@ -84,6 +96,8 @@ class CapsuleNet(nn.Module):
     def __init__(self):
         super(CapsuleNet, self).__init__()
 
+        
+        self.batch_norm_0 = nn.BatchNorm2d(1)
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=256, kernel_size=9, stride=1)
         self.primary_capsules = CapsuleLayer(num_capsules=8, num_route_nodes=-1, in_channels=256, out_channels=32,
                                              kernel_size=9, stride=2)
@@ -100,6 +114,8 @@ class CapsuleNet(nn.Module):
         )
 
     def forward(self, x, y=None):
+    
+        x = self.batch_norm_0(x)
         x = F.relu(self.conv1(x), inplace=True)
         x = self.primary_capsules(x)
         x = self.digit_capsules(x).squeeze().transpose(0, 1)
@@ -136,7 +152,7 @@ class CapsuleLoss(nn.Module):
         return (margin_loss + 0.0005 * reconstruction_loss) / images.size(0)
 
 
-if __name__ == "__main__":
+def train_and_test_capsnet():
     from torch.autograd import Variable
     from torch.optim import Adam
     from torchnet.engine import Engine
@@ -147,7 +163,8 @@ if __name__ == "__main__":
     import torchnet as tnt
 
     model = CapsuleNet()
-    # model.load_state_dict(torch.load('epochs/epoch_327.pt'))
+    # change this line to run 
+    model.load_state_dict(torch.load("./capsule_networks/epochs/epoch_32.pt"))
     model.cuda()
 
     print("# parameters:", sum(param.numel() for param in model.parameters()))
@@ -159,15 +176,16 @@ if __name__ == "__main__":
     meter_accuracy = tnt.meter.ClassErrorMeter(accuracy=True)
     confusion_meter = tnt.meter.ConfusionMeter(NUM_CLASSES, normalized=True)
 
-    train_loss_logger = VisdomPlotLogger('line', opts={'title': 'Train Loss'})
-    train_error_logger = VisdomPlotLogger('line', opts={'title': 'Train Accuracy'})
-    test_loss_logger = VisdomPlotLogger('line', opts={'title': 'Test Loss'})
-    test_accuracy_logger = VisdomPlotLogger('line', opts={'title': 'Test Accuracy'})
-    confusion_logger = VisdomLogger('heatmap', opts={'title': 'Confusion matrix',
-                                                     'columnnames': list(range(NUM_CLASSES)),
-                                                     'rownames': list(range(NUM_CLASSES))})
-    ground_truth_logger = VisdomLogger('image', opts={'title': 'Ground Truth'})
-    reconstruction_logger = VisdomLogger('image', opts={'title': 'Reconstruction'})
+    if(0):
+        train_loss_logger = VisdomPlotLogger('line', opts={'title': 'Train Loss'})
+        train_error_logger = VisdomPlotLogger('line', opts={'title': 'Train Accuracy'})
+        test_loss_logger = VisdomPlotLogger('line', opts={'title': 'Test Loss'})
+        test_accuracy_logger = VisdomPlotLogger('line', opts={'title': 'Test Accuracy'})
+        confusion_logger = VisdomLogger('heatmap', opts={'title': 'Confusion matrix',
+                                                         'columnnames': list(range(NUM_CLASSES)),
+                                                         'rownames': list(range(NUM_CLASSES))})
+        ground_truth_logger = VisdomLogger('image', opts={'title': 'Ground Truth'})
+        reconstruction_logger = VisdomLogger('image', opts={'title': 'Reconstruction'})
 
     capsule_loss = CapsuleLoss()
 
@@ -259,9 +277,122 @@ if __name__ == "__main__":
     #     state['epoch'] = 327
     #
     # engine.hooks['on_start'] = on_start
+    
     engine.hooks['on_sample'] = on_sample
     engine.hooks['on_forward'] = on_forward
     engine.hooks['on_start_epoch'] = on_start_epoch
     engine.hooks['on_end_epoch'] = on_end_epoch
-
+    
+    t0 = time.time()
+    
+    from torch.autograd import Variable
     engine.train(processor, get_iterator(True), maxepoch=NUM_EPOCHS, optimizer=optimizer)
+    print("time to train CapsNet for %i epochs = %.2f seconds"%(NUM_EPOCHS,time.time()-t0))
+    # test performance  
+    
+    # Download dataset (if necessary) and define test set transformation
+
+    batch_size = 8
+    degrees= -23
+
+    transform_normal = transforms.Compose([torchvision.transforms.RandomAffine(0, translate=(0.0714,0.0714)),\
+                                           transforms.ToTensor(),\
+                                           transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+
+    transform_rotate = transforms.Compose([torchvision.transforms.RandomRotation([degrees,degrees+1e-7], resample=False, expand=False, center=None),\
+                                            transforms.ToTensor(),\
+                                            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+
+    train = torchvision.datasets.MNIST(root='./data', train=True,download=True,transform=transform_normal)
+    test = torchvision.datasets.MNIST(root='./data', train=False,download=True,transform=transform_rotate)
+    test_norot = torchvision.datasets.MNIST(root='./data', train=False,download=True,transform=transform_normal)
+
+    # Data iterator definitions
+    train_loader = torch.utils.data.DataLoader(train, batch_size=batch_size,shuffle=True)
+    test_loader = torch.utils.data.DataLoader(test, batch_size=batch_size,shuffle=False)
+    test_loader_norot = torch.utils.data.DataLoader(test_norot, batch_size=batch_size,shuffle=False)
+
+    # Define class labels
+    classes = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten")  
+    dataiter = iter(test_loader_norot)
+    images, labels = dataiter.next()
+    #imshow(torchvision.utils.make_grid(images))
+
+    images = images.cuda()
+    labels = labels.cuda()
+    
+    pred_prob, recon = model(images)
+
+    _, predicted = torch.max(pred_prob,1)
+
+    print('Test predicted: ', ' '.join('%5s' % classes[predicted[j]] for j in range(batch_size)))
+    print('Test groundTruth: ', ' '.join('%5s' % classes[labels[j]] for j in range(batch_size)))
+
+
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for data in test_loader_norot:
+            images, labels = data
+        
+            images = images.cuda()
+            labels = labels.cuda()
+
+            pred_prob, recon = model(images)
+            #(pred_prob)
+            _, predicted = torch.max(pred_prob,1)
+            #predicted = outputs
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+
+    print('Accuracy of the network on the 10000 (unrotated) test images: %.2f %%' % (
+        100 * correct / total))
+
+    # test with rotation
+    dataiter = iter(test_loader)
+    images, labels = dataiter.next()
+
+    # print images
+    #imshow(torchvision.utils.make_grid(images))
+
+    images = images.cuda()
+    labels = labels.cuda()
+    
+    predicted, recon = model(images)
+    #print(predicted)
+    _, predicted = torch.max(pred_prob, 1)
+
+    print('Test predicted: ', ' '.join('%5s' % classes[predicted[j]] for j in range(batch_size)))
+    print('Test groundTruth: ', ' '.join('%5s' % classes[labels[j]] for j in range(batch_size)))
+
+
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for data in test_loader:
+            images, labels = data
+
+     
+            images = images.cuda()
+            labels = labels.cuda()
+    
+            pred_prob, recon = model(images)
+            #(pred_prob)
+            _, predicted = torch.max(pred_prob,1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+
+    print('Accuracy of the network on the 10000 (rotated) test images: %.2f %%' % (
+        100 * correct / total))
+
+
+if __name__ == "__main__":
+    from torch.autograd import Variable
+    from torch.optim import Adam
+    from torchnet.engine import Engine
+    from torchnet.logger import VisdomPlotLogger, VisdomLogger
+    from torchvision.utils import make_grid
+    from torchvision.datasets.mnist import MNIST
+    from tqdm import tqdm
+    import torchnet as tnt
+    train_and_test_capsnet()
