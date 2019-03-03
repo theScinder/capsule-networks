@@ -21,8 +21,8 @@ import torchvision.transforms as transforms
 
 BATCH_SIZE = 8
 NUM_CLASSES = 10
-NUM_EPOCHS = 1
-NUM_ROUTING_ITERATIONS = 3
+NUM_EPOCHS = 32 
+NUM_ROUTING_ITERATIONS = 2
 
 def imshow(img):
     img = img / 2 + 0.5     # unnormalize
@@ -176,16 +176,16 @@ def train_and_test_capsnet():
     meter_accuracy = tnt.meter.ClassErrorMeter(accuracy=True)
     confusion_meter = tnt.meter.ConfusionMeter(NUM_CLASSES, normalized=True)
 
-    if(0):
-        train_loss_logger = VisdomPlotLogger('line', opts={'title': 'Train Loss'})
-        train_error_logger = VisdomPlotLogger('line', opts={'title': 'Train Accuracy'})
-        test_loss_logger = VisdomPlotLogger('line', opts={'title': 'Test Loss'})
-        test_accuracy_logger = VisdomPlotLogger('line', opts={'title': 'Test Accuracy'})
-        confusion_logger = VisdomLogger('heatmap', opts={'title': 'Confusion matrix',
-                                                         'columnnames': list(range(NUM_CLASSES)),
-                                                         'rownames': list(range(NUM_CLASSES))})
-        ground_truth_logger = VisdomLogger('image', opts={'title': 'Ground Truth'})
-        reconstruction_logger = VisdomLogger('image', opts={'title': 'Reconstruction'})
+    #if(0):
+    train_loss_logger = VisdomPlotLogger('line', opts={'title': 'Train Loss'})
+    train_error_logger = VisdomPlotLogger('line', opts={'title': 'Train Accuracy'})
+    test_loss_logger = VisdomPlotLogger('line', opts={'title': 'Test Loss'})
+    test_accuracy_logger = VisdomPlotLogger('line', opts={'title': 'Test Accuracy'})
+    confusion_logger = VisdomLogger('heatmap', opts={'title': 'Confusion matrix',
+                                                     'columnnames': list(range(NUM_CLASSES)),
+                                                     'rownames': list(range(NUM_CLASSES))})
+    ground_truth_logger = VisdomLogger('image', opts={'title': 'Ground Truth'})
+    reconstruction_logger = VisdomLogger('image', opts={'title': 'Reconstruction'})
 
     capsule_loss = CapsuleLoss()
 
@@ -258,7 +258,7 @@ def train_and_test_capsnet():
         print('[Epoch %d] Testing Loss: %.4f (Accuracy: %.2f%%)' % (
             state['epoch'], meter_loss.value()[0], meter_accuracy.value()[0]))
 
-        torch.save(model.state_dict(), 'epochs/epoch_%d.pt' % state['epoch'])
+        torch.save(model.state_dict(), './capsule_networks/epochs/epoch_%d.pt' % state['epoch'])
 
         # Reconstruction visualization.
 
