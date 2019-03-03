@@ -163,8 +163,10 @@ def train_and_test_capsnet():
     import torchnet as tnt
 
     model = CapsuleNet()
-    # change this line to run 
-    model.load_state_dict(torch.load("./capsule_networks/epochs/epoch_32.pt"))
+    # this line is intended to be used when running the script from a Jupyter notebook one level up
+    model.load_state_dict(torch.load("./capsule_networks_rotated_MNIST/epochs/epoch_32.pt"))
+    # otherwise use:
+    #model.load_state_dict(torch.load("./epochs/epoch_32.pt"))
     model.cuda()
 
     print("# parameters:", sum(param.numel() for param in model.parameters()))
