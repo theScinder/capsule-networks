@@ -260,7 +260,7 @@ def train_and_test_capsnet():
         print('[Epoch %d] Testing Loss: %.4f (Accuracy: %.2f%%)' % (
             state['epoch'], meter_loss.value()[0], meter_accuracy.value()[0]))
 
-        torch.save(model.state_dict(), './capsule_networks/epochs/epoch_%d.pt' % state['epoch'])
+        torch.save(model.state_dict(), './capsule_networks_rotated_MNIST/epochs/epoch_%d.pt' % state['epoch'])
 
         # Reconstruction visualization.
 
