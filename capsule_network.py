@@ -152,7 +152,7 @@ class CapsuleLoss(nn.Module):
         return (margin_loss + 0.0005 * reconstruction_loss) / images.size(0)
 
 
-def train_and_test_capsnet():
+def train_and_test_capsnet(load_model=False, max_epochs=100):
     from torch.autograd import Variable
     from torch.optim import Adam
     from torchnet.engine import Engine
@@ -163,10 +163,14 @@ def train_and_test_capsnet():
     import torchnet as tnt
 
     model = CapsuleNet()
-    # this line is intended to be used when running the script from a Jupyter notebook one level up
-    model.load_state_dict(torch.load("./capsule_networks_rotated_MNIST/epochs/epoch_32.pt"))
-    # otherwise use:
-    #model.load_state_dict(torch.load("./epochs/epoch_32.pt"))
+    if(load_model):
+        try:
+            # this line is intended to be used when running the script from a Jupyter notebook one level up
+            model.load_state_dict(torch.load("./capsule_networks_rotated_MNIST/epochs/epoch_32.pt"))
+        except:
+            # otherwise use:
+            model.load_state_dict(torch.load("./epochs/epoch_32.pt"))
+    
     model.cuda()
 
     print("# parameters:", sum(param.numel() for param in model.parameters()))
@@ -259,9 +263,11 @@ def train_and_test_capsnet():
 
         print('[Epoch %d] Testing Loss: %.4f (Accuracy: %.2f%%)' % (
             state['epoch'], meter_loss.value()[0], meter_accuracy.value()[0]))
-
-        torch.save(model.state_dict(), './capsule_networks_rotated_MNIST/epochs/epoch_%d.pt' % state['epoch'])
-
+        try:
+            torch.save(model.state_dict(), './capsule_networks_rotated_MNIST/epochs/epoch_%d.pt' % state['epoch'])
+        except:
+            # in case the directory is wrong
+            torch.save(model.state_dict(), './epochs/epoch_%d.pt' % state['epoch'])
         # Reconstruction visualization.
 
         test_sample = next(iter(get_iterator(False)))
@@ -288,7 +294,7 @@ def train_and_test_capsnet():
     t0 = time.time()
     
     from torch.autograd import Variable
-    engine.train(processor, get_iterator(True), maxepoch=NUM_EPOCHS, optimizer=optimizer)
+    engine.train(processor, get_iterator(True), maxepoch=max_epochs, optimizer=optimizer)
     print("time to train CapsNet for %i epochs = %.2f seconds"%(NUM_EPOCHS,time.time()-t0))
     # test performance  
     
